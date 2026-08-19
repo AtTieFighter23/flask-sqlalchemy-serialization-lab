@@ -17,6 +17,12 @@ class Customer(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String)
 
+    # One-to-Many: Customer has many Reviews
+    reviews = db.relationship('Review', back_populates='customer')
+
+    # Association proxy: get the list of Items a customer has reviewed
+    items = association_proxy('reviews', 'item')
+
     def __repr__(self):
         return f'<Customer {self.id}, {self.name}>'
 
@@ -28,5 +34,49 @@ class Item(db.Model):
     name = db.Column(db.String)
     price = db.Column(db.Float)
 
+    # One-to-Many: Item has many Reviews
+    reviews = db.relationship('Review', back_populates='item')
+
     def __repr__(self):
         return f'<Item {self.id}, {self.name}, {self.price}>'
+
+
+class Review(db.Model):
+    __tablename__ = 'reviews'
+
+    id = db.Column(db.Integer, primary_key=True)
+    comment = db.Column(db.String)
+    customer_id = db.Column(db.Integer, db.ForeignKey('customers.id'))
+    item_id = db.Column(db.Integer, db.ForeignKey('items.id'))
+
+    # Many-to-One: Review belongs to a Customer and an Item
+    customer = db.relationship('Customer', back_populates='reviews')
+    item = db.relationship('Item', back_populates='reviews')
+
+    def __repr__(self):
+        return f'<Review {self.id}, {self.comment}>'
+
+
+# --- Marshmallow schemas ---
+# Nested fields use a lambda so schemas can reference each other regardless
+# of definition order, and each nested reference excludes the field that
+# would otherwise cause infinite recursion.
+
+class CustomerSchema(Schema):
+    id = fields.Integer()
+    name = fields.String()
+    reviews = fields.Nested(lambda: ReviewSchema(exclude=('customer',)), many=True)
+
+
+class ItemSchema(Schema):
+    id = fields.Integer()
+    name = fields.String()
+    price = fields.Float()
+    reviews = fields.Nested(lambda: ReviewSchema(exclude=('item',)), many=True)
+
+
+class ReviewSchema(Schema):
+    id = fields.Integer()
+    comment = fields.String()
+    customer = fields.Nested(lambda: CustomerSchema(exclude=('reviews',)))
+    item = fields.Nested(lambda: ItemSchema(exclude=('reviews',)))
